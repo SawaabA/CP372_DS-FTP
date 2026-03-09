@@ -2,25 +2,10 @@
 # DS-FTP Testing Guide
 ---------------------------------------------------------------------------------------------
 This file has:
-- automatic testing
 - manual testing with 2 terminals
----------------------------------------------------------------------------------------------
-## 1) Automatic Testing
 
-```
-.\run_feature_tests.ps1
-```
-
-This checks:
-- Stop-and-Wait basic
-- Stop-and-Wait with ACK loss
-- empty file case
-- GBN window 20
-- GBN window 40 + ACK loss
-- GBN window 80 + wrap-around stress
-- 3-timeout critical failure rule
 ---------------------------------------------------------------------------------------------
-## 2) Manual Testing (2 terminals)
+##  Manual Testing (2 terminals)
 ### start powerfshell  
 
 ```powershell
