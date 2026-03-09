@@ -10,6 +10,7 @@ import java.util.Map;
 public class Receiver {
 
     // ===== STUDENT CODE START =====
+    // ------------- what we are doing --- receiver config ---
     // default recive window if env var not set
     private static final int DEFAULT_RECEIVE_WINDOW = 80;
 
@@ -19,6 +20,7 @@ public class Receiver {
     }
 
     public static void main(String[] args) {
+        // ------------- what we are doing --- receiver start + parse args ---
         // basic arg check first
         if (args.length != 5) {
             // wrong args count so show usage and stop
@@ -27,6 +29,7 @@ public class Receiver {
         }
 
         try {
+            // ------------- what we are doing --- read command values ---
             // parse cmd args into simple vars
             String senderIp = args[0];
             // sender ack port where we send all ACK packet
@@ -40,17 +43,20 @@ public class Receiver {
 
             // sender ip + ack port are used for all ACK replies
             InetAddress senderAddress = InetAddress.getByName(senderIp);
+            // this window value used in out-of-order checks
             int receiveWindow = resolveReceiveWindow();
 
             try (
                 DatagramSocket dataSocket = new DatagramSocket(receiverDataPort);
                 FileOutputStream fileOut = new FileOutputStream(outputFile)
             ) {
+                // ------------- what we are doing --- open socket and output file ---
                 // keep count of every ack we try to send
                 AckCounter ackCounter = new AckCounter();
 
                 System.out.println("Receiver listening on port " + receiverDataPort);
 
+                // ------------- what we are doing --- phase1 wait SOT ---
                 // phase 1: wait SOT then ACK it
                 int expectedSeq = waitForSot(
                     dataSocket,
@@ -60,6 +66,7 @@ public class Receiver {
                     ackCounter
                 );
 
+                // ------------- what we are doing --- phase2 data + phase3 eot ---
                 // phase 2 + 3: data loop and then EOT
                 runReceiveLoop(
                     dataSocket,
@@ -73,16 +80,19 @@ public class Receiver {
                 );
             }
         } catch (NumberFormatException ex) {
+            // maybe wrong number typed by us
             // user gave bad number in command args
             System.out.println("Invalid number in args.");
             printUsage();
         } catch (IOException ex) {
+            // socket/file issues end up here
             // network/file write errors
             System.out.println("Receiver error: " + ex.getMessage());
         }
     }
 
     private static int resolveReceiveWindow() {
+        // ------------- what we are doing --- pick receiver window size ---
         // receiver has no CLI window, so DSFTP_WINDOW can override
         int configured = DEFAULT_RECEIVE_WINDOW;
         String envValue = System.getenv("DSFTP_WINDOW");
@@ -92,6 +102,7 @@ public class Receiver {
                 // parse env window first
                 int parsed = Integer.parseInt(envValue.trim());
 
+                // we need valid gbn window only
                 // accept only valid DS-FTP window values
                 if (parsed >= 4 && parsed <= 128 && parsed % 4 == 0) {
                     configured = parsed;
@@ -116,6 +127,7 @@ public class Receiver {
         int rn,
         AckCounter ackCounter
     ) throws IOException {
+        // ------------- what we are doing --- keep waiting for first SOT ---
         // wait forever untill valid SOT arrives
         while (true) {
             DSPacket packet = receivePacket(dataSocket);
@@ -127,6 +139,7 @@ public class Receiver {
             // handshake only accepts SOT seq 0
             if (packet.getType() == DSPacket.TYPE_SOT && packet.getSeqNum() == 0) {
                 System.out.println("SOT recv seq=0");
+                // send ack maybe dropped by chaos rn
                 // ack sot (can be dropped by RN rule too)
                 sendAckMaybeDrop(dataSocket, senderAddress, senderAckPort, 0, rn, ackCounter);
                 // next expected data seq starts at 1
@@ -145,6 +158,7 @@ public class Receiver {
         int expectedSeq,
         int receiveWindow
     ) throws IOException {
+        // ------------- what we are doing --- main receive loop ---
         // nextExpected = seq number we still need
         int nextExpected = expectedSeq;
         // key is seq, value is payload bytes
@@ -163,6 +177,7 @@ public class Receiver {
             int seq = packet.getSeqNum();
 
             if (type == DSPacket.TYPE_SOT) {
+                // got sot again maybe sender timeouted before
                 // if sender re-sends SOT, ack it again
                 System.out.println("SOT recv again, send ACK 0");
                 sendAckMaybeDrop(dataSocket, senderAddress, senderAckPort, 0, rn, ackCounter);
@@ -171,6 +186,7 @@ public class Receiver {
             }
 
             if (type == DSPacket.TYPE_EOT) {
+                // ------------- what we are doing --- eot close handshake ---
                 System.out.println("EOT recv seq=" + seq);
 
                 // we only close after EOT ACK actualy gets sent
@@ -188,6 +204,7 @@ public class Receiver {
                     System.out.println("Receiver done.");
                     break;
                 } else {
+                    // if dropped we must stay alive for resend eot
                     // dont close yet if eot ack was dropped
                     System.out.println("EOT ACK dropped, wait for EOT resend");
                 }
@@ -201,6 +218,7 @@ public class Receiver {
             }
 
             if (seq == nextExpected) {
+                // ------------- what we are doing --- in-order write path ---
                 // in-order packet: write now
                 writePayload(fileOut, packet.getPayload(), packet.getLength(), seq);
                 // move expected pointer by 1
@@ -216,6 +234,7 @@ public class Receiver {
                     nextExpected = (nextExpected + 1) % 128;
                 }
             } else if (isWithinWindow(nextExpected, seq, receiveWindow)) {
+                // ------------- what we are doing --- out-of-order buffer path ---
                 // out-of-order but still inside recieve window
                 if (!buffer.containsKey(seq)) {
                     // keep first copy only, no need to overwrite
@@ -227,10 +246,12 @@ public class Receiver {
                     System.out.println("DATA duplicate buffered seq=" + seq);
                 }
             } else {
+                // packet is old or too far so we throw it
                 // old packet or way ahead -> drop it
                 System.out.println("DATA discard seq=" + seq);
             }
 
+            // ------------- what we are doing --- send cumulative ack ---
             // cumulative ACK = last contiguous seq delivered
             int cumulativeAckSeq = (nextExpected + 127) % 128;
             // this ack can also be dropped by ChaosEngine RN
@@ -246,6 +267,7 @@ public class Receiver {
     }
 
     private static boolean isWithinWindow(int expectedSeq, int seq, int receiveWindow) {
+        // ------------- what we are doing --- check if seq in receive window ---
         // modulo distance from expected to this seq
         int distance = (seq - expectedSeq + 128) % 128;
         // must be ahead of expected and inside window size
@@ -254,6 +276,7 @@ public class Receiver {
 
     private static void writePayload(FileOutputStream fileOut, byte[] payload, int length, int seq)
         throws IOException {
+        // ------------- what we are doing --- write payload bytes to output file ---
         // write only real payload bytes
         fileOut.write(payload, 0, length);
         // console log for tracing
@@ -268,11 +291,13 @@ public class Receiver {
         int rn,
         AckCounter ackCounter
     ) throws IOException {
+        // ------------- what we are doing --- maybe drop or send ACK ---
         // every time we call this, we increment ack attempt count
         ackCounter.count++;
 
         // RN rule: drop every RN-th ack
         if (ChaosEngine.shouldDrop(ackCounter.count, rn)) {
+            // this is fake packet loss from assignment
             System.out.println("ACK drop seq=" + ackSeq + " (count=" + ackCounter.count + ")");
             // return false so caller know ack was not sent
             return false;
@@ -291,6 +316,7 @@ public class Receiver {
     }
 
     private static DSPacket receivePacket(DatagramSocket socket) throws IOException {
+        // ------------- what we are doing --- receive one packet + parse it ---
         // protocol says every datagram is 128 bytes
         byte[] buffer = new byte[DSPacket.MAX_PACKET_SIZE];
         DatagramPacket datagram = new DatagramPacket(buffer, buffer.length);
@@ -307,6 +333,7 @@ public class Receiver {
     }
 
     private static void printUsage() {
+        // ------------- what we are doing --- usage text ---
         System.out.println("Usage: java Receiver <sender_ip> <sender_ack_port> <rcv_data_port> <output_file> <RN>");
     }
     // ===== STUDENT CODE END =====

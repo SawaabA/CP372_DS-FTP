@@ -11,10 +11,12 @@ import java.util.List;
 public class Sender {
 
     // ===== STUDENT CODE START =====
+    // ------------- what we are doing --- sender entry config ---
     // max retrys before we stop transfer
     private static final int MAX_TIMEOUT_RETRIES = 3;
 
     public static void main(String[] args) {
+        // ------------- what we are doing --- read args and start sender ---
 
         // basic arg check first
         if (args.length != 5 && args.length != 6) {
@@ -24,6 +26,7 @@ public class Sender {
         }
 
         try {
+            // ------------- what we are doing --- parse all cli values ---
             // read args from command line
             String receiverIp = args[0];
             // this is port where receiver listen DATA
@@ -40,6 +43,7 @@ public class Sender {
             int windowSize = 1;
 
             if (useGbn) {
+                // ------------- what we are doing --- validate gbn window ---
                 // parse gbn window from user input
                 windowSize = Integer.parseInt(args[5]);
                 // window has to follow assingment rule
@@ -65,12 +69,14 @@ public class Sender {
             // this convert ip string -> InetAddress object
 
             try (DatagramSocket ackSocket = new DatagramSocket(senderAckPort)) {
+                // ------------- what we are doing --- prepare socket + timer ---
                 // timeout is for waiting ACK packet
                 ackSocket.setSoTimeout(timeoutMs);
 
                 // timer starts right before SOT send
                 long startTimeNs = System.nanoTime();
 
+                // ------------- what we are doing --- phase1 handshake SOT ---
                 // phase 1: SOT handshake
                 DSPacket sotPacket = new DSPacket(DSPacket.TYPE_SOT, 0, null);
                 // if sot handshake fail after retrys -> stop transfer
@@ -86,6 +92,7 @@ public class Sender {
                     return;
                 }
 
+                // ------------- what we are doing --- phase2 send data ---
                 // phase 2: send file packets
                 // stop-wait when no window, gbn when window exists
                 boolean dataOk;
@@ -114,6 +121,7 @@ public class Sender {
                     return;
                 }
 
+                // ------------- what we are doing --- phase3 EOT close ---
                 // phase 3: EOT teardown
                 DSPacket eotPacket = new DSPacket(DSPacket.TYPE_EOT, eotSeq, null);
                 // if eot ack never come -> fail as well
@@ -130,22 +138,26 @@ public class Sender {
                     return;
                 }
 
+                // ------------- what we are doing --- print transfer time ---
                 // print total time as assignment asks
                 double totalSeconds = (System.nanoTime() - startTimeNs) / 1_000_000_000.0;
                 System.out.printf("Total Transmission Time: %.2f seconds%n", totalSeconds);
             }
 
         } catch (NumberFormatException ex) {
+            // maybe user typo in numbers idk
             // user typed non-number for port/timeout/window
             System.out.println("Invalid number in args.");
             printUsage();
         } catch (IOException ex) {
+            // file missing or socket thing fail
             // file/socket errors comes here
             System.out.println("Sender error: " + ex.getMessage());
         }
     }
 
     private static List<DSPacket> buildDataPackets(byte[] fileBytes) {
+        // ------------- what we are doing --- turn file bytes into DATA packets ---
         // list that keep every DATA packet object
         List<DSPacket> packets = new ArrayList<>();
         // seq starts 1 by assignment
@@ -180,6 +192,7 @@ public class Sender {
         int receiverPort,
         List<DSPacket> dataPackets
     ) {
+        // ------------- what we are doing --- stop and wait loop ---
         // send each packet one by one
         for (DSPacket packet : dataPackets) {
             // stop and wait: send one pakcet then wait for its ack
@@ -209,6 +222,7 @@ public class Sender {
         List<DSPacket> dataPackets,
         int windowSize
     ) {
+        // ------------- what we are doing --- gbn state vars ---
         // total DATA count to send
         int totalPackets = dataPackets.size();
         // oldest unacked index
@@ -220,6 +234,7 @@ public class Sender {
 
         // keep going until all packets acked
         while (base < totalPackets) {
+            // ------------- what we are doing --- compute current window ---
             // right edge of sending window
             int windowEnd = Math.min(base + windowSize, totalPackets);
 
@@ -245,6 +260,7 @@ public class Sender {
             }
 
             try {
+                // ------------- what we are doing --- wait and process ack ---
                 // block waiting for ACK packet
                 DSPacket ackPacket = receiveAckPacket(ackSocket);
                 if (ackPacket == null) {
@@ -267,6 +283,7 @@ public class Sender {
                 }
 
             } catch (SocketTimeoutException ex) {
+                // ------------- what we are doing --- timeout then resend window ---
                 // timeout means no useful ack in timeout period
                 timeoutCountForBase++;
                 if (timeoutCountForBase >= MAX_TIMEOUT_RETRIES) {
@@ -302,6 +319,7 @@ public class Sender {
     }
 
     private static int findAckIndex(List<DSPacket> dataPackets, int base, int nextToSend, int ackSeq) {
+        // ------------- what we are doing --- map ack seq to packet index ---
         // find ack seq inside outstanding packets
         for (int i = base; i < nextToSend; i++) {
             if (dataPackets.get(i).getSeqNum() == ackSeq) {
@@ -322,6 +340,7 @@ public class Sender {
         int toIndex,
         String logPrefix
     ) throws IOException {
+        // ------------- what we are doing --- send with chaos 4-packet order ---
         // start from first index of range
         int index = fromIndex;
 
@@ -341,6 +360,7 @@ public class Sender {
                 // send in i+2, i, i+3, i+1 order
                 List<DSPacket> permuted = ChaosEngine.permutePackets(group);
                 for (DSPacket packet : permuted) {
+                    // this order is weird on purpos from assignment
                     // each permuted packet sent normal UDP way
                     sendPacket(socket, receiverAddress, receiverPort, packet, logPrefix);
                 }
@@ -364,6 +384,7 @@ public class Sender {
         int expectedAckSeq,
         String label
     ) {
+        // ------------- what we are doing --- send one packet and wait its ack ---
         // count timeout retrys for this exact packet
         int timeoutCount = 0;
 
@@ -387,6 +408,7 @@ public class Sender {
                         return true;
                     }
 
+                    // maybe old ack from before, so just ignore
                     // wrong ack, keep waiting untill timeout
                     System.out.println(
                         "ACK ignored for " + label
@@ -400,6 +422,7 @@ public class Sender {
                 // timeout count is for same packet only
                 System.out.println(label + " timeout " + timeoutCount + "/3");
             } catch (IOException ex) {
+                // if socket broke we stop
                 // socket read/send error
                 System.out.println(label + " send/ack error: " + ex.getMessage());
                 return false;
@@ -411,6 +434,7 @@ public class Sender {
     }
 
     private static DSPacket receiveAckPacket(DatagramSocket socket) throws IOException {
+        // ------------- what we are doing --- receive and parse only ACK ---
         // fixed 128 bytes every time by protocol
         byte[] buffer = new byte[DSPacket.MAX_PACKET_SIZE];
         DatagramPacket datagram = new DatagramPacket(buffer, buffer.length);
@@ -441,6 +465,7 @@ public class Sender {
         DSPacket packet,
         String logPrefix
     ) throws IOException {
+        // ------------- what we are doing --- raw udp send helper ---
         // convert packet object into raw 128-byte datagram
         byte[] raw = packet.toBytes();
         // target is receiver data port always
@@ -452,6 +477,7 @@ public class Sender {
     }
 
     private static void printUsage() {
+        // ------------- what we are doing --- usage text ---
         System.out.println(
             "Usage (Stop-and-Wait): java Sender <rcv_ip> <rcv_data_port> <sender_ack_port> <input_file> <timeout_ms>"
         );

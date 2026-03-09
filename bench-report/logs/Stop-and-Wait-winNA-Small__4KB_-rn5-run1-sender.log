@@ -1,0 +1,47 @@
+SEND SOT seq=0
+ACK ok for SOT seq=0
+SEND DATA seq=1
+ACK ok for DATA seq=1
+SEND DATA seq=2
+ACK ok for DATA seq=2
+SEND DATA seq=3
+ACK ok for DATA seq=3
+SEND DATA seq=4
+DATA timeout 1/3
+SEND DATA seq=4
+ACK ok for DATA seq=4
+SEND DATA seq=5
+ACK ok for DATA seq=5
+SEND DATA seq=6
+ACK ok for DATA seq=6
+SEND DATA seq=7
+ACK ok for DATA seq=7
+SEND DATA seq=8
+DATA timeout 1/3
+SEND DATA seq=8
+ACK ok for DATA seq=8
+SEND DATA seq=9
+ACK ok for DATA seq=9
+SEND DATA seq=10
+ACK ok for DATA seq=10
+SEND DATA seq=11
+ACK ok for DATA seq=11
+SEND DATA seq=12
+DATA timeout 1/3
+SEND DATA seq=12
+ACK ok for DATA seq=12
+SEND DATA seq=13
+ACK ok for DATA seq=13
+SEND DATA seq=14
+ACK ok for DATA seq=14
+SEND DATA seq=15
+ACK ok for DATA seq=15
+SEND DATA seq=16
+DATA timeout 1/3
+SEND DATA seq=16
+ACK ok for DATA seq=16
+SEND DATA seq=17
+ACK ok for DATA seq=17
+SEND EOT seq=18
+ACK ok for EOT seq=18
+Total Transmission Time: 1.30 seconds
